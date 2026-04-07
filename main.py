@@ -4,8 +4,11 @@ from feedgen.feed import FeedGenerator
 import os
 import pytz
 from datetime import datetime
+import urllib3
 
-# Takip etmek istediğin tüm MKÜ linkleri
+# SSL sertifika hatalarını görmezden gelmek için
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 URLS = {
     "mku_haberler": "https://mku.edu.tr/newslist",
     "mku_duyurular": "https://mku.edu.tr/announcements",
@@ -20,9 +23,14 @@ URLS = {
 def generate_rss(name, url):
     print(f"{name} için veriler çekiliyor...")
     
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    # Üniversite sitelerini kandırmak için daha gerçekçi bir tarayıcı kimliği
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+    }
+    
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=15, verify=False)
         response.raise_for_status()
     except Exception as e:
         print(f"Bağlantı hatası ({url}): {e}")
@@ -30,7 +38,6 @@ def generate_rss(name, url):
 
     soup = BeautifulSoup(response.content, 'html.parser')
     
-    # RSS Beslemesi Ayarları
     fg = FeedGenerator()
     fg.id(url)
     fg.title(name.replace('_', ' ').upper())
@@ -39,22 +46,44 @@ def generate_rss(name, url):
     fg.description(f'{name} için otomatik RSS beslemesi')
     fg.language('tr')
 
-    # Sayfadaki linkleri bulma
-    items = soup.find_all('a', href=True)
     added_links = set()
     count = 0
     
-    for item in items:
+    # Sayfadaki tüm linkleri bul
+    for item in soup.find_all('a', href=True):
         link = item['href']
+        
+        # Gereksiz sistem linklerini (javascript, tel, mailto vb.) atla
+        if link.startswith(('#', 'javascript', 'mailto', 'tel')) or len(link) < 3:
+            continue
+            
+        # Linkin metnini al
         title = item.text.strip()
         
-        if title and len(title) > 10: 
+        # Eğer link boşsa veya sadece "Tıklayın" yazıyorsa, bir üst kutudaki asıl metni çek
+        if len(title) < 15:
+            if item.parent:
+                title = item.parent.text.strip()
+                
+        # Metindeki fazla boşlukları temizle
+        title = " ".join(title.split())
+        
+        # Metin yeterince uzunsa (gerçek bir haber başlığıysa) işleme al
+        if len(title) > 15 and len(title) < 300: 
+            
+            # Ana sayfa, iletişim gibi menü butonlarını filtrele
+            lower_title = title.lower()
+            ignore_words = ["ana sayfa", "hakkımızda", "iletişim", "misyon", "vizyon", "akademik", "öğrenci"]
+            if any(word in lower_title for word in ignore_words) and len(title) < 30:
+                continue
+
+            # Yarım linkleri tam üniversite linkine çevir
             if not link.startswith('http'):
-                full_link = "https://mku.edu.tr" + link if link.startswith('/') else "https://mku.edu.tr/" + link
+                full_link = "https://mku.edu.tr/" + link.lstrip('/')
             else:
                 full_link = link
 
-            if full_link not in added_links:
+            if "mku.edu.tr" in full_link and full_link not in added_links:
                 added_links.add(full_link)
                 
                 fe = fg.add_entry()
