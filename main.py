@@ -1,13 +1,9 @@
-import requests
+from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 from feedgen.feed import FeedGenerator
 import os
 import pytz
 from datetime import datetime
-import urllib3
-
-# SSL sertifika hatalarını görmezden gelmek için
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 URLS = {
     "mku_haberler": "https://mku.edu.tr/newslist",
@@ -20,23 +16,19 @@ URLS = {
     "turkce_ogrt_duyurular": "https://mku.edu.tr/departments/1488/announcements"
 }
 
-def generate_rss(name, url):
-    print(f"{name} için veriler çekiliyor...")
-    
-    # Üniversite sitelerini kandırmak için daha gerçekçi bir tarayıcı kimliği
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
-    }
+def generate_rss(name, url, page):
+    print(f"{name} için veriler çekiliyor: {url}")
     
     try:
-        response = requests.get(url, headers=headers, timeout=15, verify=False)
-        response.raise_for_status()
+        # Gerçek bir tarayıcı gibi siteye girer ve sitenin tam yüklenmesini bekler
+        page.goto(url, timeout=40000, wait_until="networkidle")
+        page.wait_for_timeout(3000) # İçeriklerin ekrana düşmesi için ekstra 3 saniye bekleme
+        html_content = page.content()
     except Exception as e:
         print(f"Bağlantı hatası ({url}): {e}")
         return
 
-    soup = BeautifulSoup(response.content, 'html.parser')
+    soup = BeautifulSoup(html_content, 'html.parser')
     
     fg = FeedGenerator()
     fg.id(url)
@@ -49,39 +41,27 @@ def generate_rss(name, url):
     added_links = set()
     count = 0
     
-    # Sayfadaki tüm linkleri bul
     for item in soup.find_all('a', href=True):
         link = item['href']
-        
-        # Gereksiz sistem linklerini (javascript, tel, mailto vb.) atla
-        if link.startswith(('#', 'javascript', 'mailto', 'tel')) or len(link) < 3:
-            continue
-            
-        # Linkin metnini al
         title = item.text.strip()
         
-        # Eğer link boşsa veya sadece "Tıklayın" yazıyorsa, bir üst kutudaki asıl metni çek
-        if len(title) < 15:
-            if item.parent:
-                title = item.parent.text.strip()
+        # Linkin kendi metni yoksa dışındaki kutucuğun metnini al
+        if len(title) < 15 and item.parent:
+            title = item.parent.text.strip()
                 
-        # Metindeki fazla boşlukları temizle
-        title = " ".join(title.split())
+        title = " ".join(title.split()) # Fazla boşlukları temizle
         
-        # Metin yeterince uzunsa (gerçek bir haber başlığıysa) işleme al
-        if len(title) > 15 and len(title) < 300: 
+        if 15 < len(title) < 300 and not link.startswith(('#', 'javascript', 'mailto')):
             
-            # Ana sayfa, iletişim gibi menü butonlarını filtrele
-            lower_title = title.lower()
-            ignore_words = ["ana sayfa", "hakkımızda", "iletişim", "misyon", "vizyon", "akademik", "öğrenci"]
-            if any(word in lower_title for word in ignore_words) and len(title) < 30:
+            # Sayfadaki gereksiz menü butonlarını ele
+            ignore_words = ["ana sayfa", "iletişim", "misyon", "hakkımızda", "yönetim", "telefon"]
+            if any(w in title.lower() for w in ignore_words) and len(title) < 30:
                 continue
 
-            # Yarım linkleri tam üniversite linkine çevir
             if not link.startswith('http'):
                 full_link = "https://mku.edu.tr/" + link.lstrip('/')
             else:
-                full_link = link
+                full_link = full_link = link
 
             if "mku.edu.tr" in full_link and full_link not in added_links:
                 added_links.add(full_link)
@@ -95,7 +75,7 @@ def generate_rss(name, url):
                 fe.published(datetime.now(tz)) 
                 
                 count += 1
-                if count >= 15: # En yeni 15 içeriği alır
+                if count >= 15:
                     break
 
     if not os.path.exists('rss_files'):
@@ -104,5 +84,19 @@ def generate_rss(name, url):
     fg.rss_file(f"rss_files/{name}.xml")
     print(f"{name}.xml oluşturuldu. Bulunan içerik: {count}")
 
-for name, url in URLS.items():
-    generate_rss(name, url)
+def main():
+    # Gerçek bir Chrome tarayıcı motoru başlatıyoruz
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+        page = context.new_page()
+        
+        for name, url in URLS.items():
+            generate_rss(name, url, page)
+            
+        browser.close()
+
+if __name__ == "__main__":
+    main()
