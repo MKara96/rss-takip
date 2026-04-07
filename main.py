@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 from feedgen.feed import FeedGenerator
 import os
 import pytz
-from datetime import datetime
+from datetime import datetime, timedelta
 
 URLS = {
     "mku_haberler": "https://mku.edu.tr/newslist",
@@ -29,8 +29,6 @@ def generate_rss(name, url, page):
 
     soup = BeautifulSoup(html_content, 'html.parser')
     
-    # Sayfanın üst (header), alt (footer) ve yan menülerini (nav, aside) tamamen sil!
-    # Bu sayede bot sadece orta kısımdaki asıl haber kartlarına odaklanır.
     for element in soup(["header", "footer", "nav", "aside"]):
         element.decompose()
     
@@ -45,36 +43,32 @@ def generate_rss(name, url, page):
     added_links = set()
     count = 0
     
+    # Zaman hilesi için sistemin o anki saatini sabitliyoruz
+    tz = pytz.timezone('Europe/Istanbul')
+    base_time = datetime.now(tz)
+    
     for item in soup.find_all('a', href=True):
         link = item['href']
         if link.startswith(('#', 'javascript', 'mailto', 'tel')) or len(link) < 3:
             continue
             
-        # Metni parçalara ayır
         raw_text = item.get_text(separator=' | ', strip=True)
         chunks = [c.strip() for c in raw_text.split(' | ') if len(c.strip()) > 2]
         
-        # Eğer link sadece kısacık bir başlıksa, onu saran kartı (div) bulup içindeki tarihi/bölümü al
         if len(chunks) <= 1 or (len(chunks) > 0 and len(chunks[0]) < 50):
             parent_div = item.find_parent('div')
             if parent_div:
                 parent_text = parent_div.get_text(separator=' | ', strip=True)
                 parent_chunks = [c.strip() for c in parent_text.split(' | ') if len(c.strip()) > 2]
-                
-                # Kart yapısına uygunsa (2 ile 8 parça arası detay içeriyorsa) bunu baz al
                 if 1 < len(parent_chunks) <= 8:
                     chunks = parent_chunks
 
         if not chunks: continue
-        if len(chunks) > 8: continue # Çok büyük sayfa iskeletlerini (yanlış algılamaları) atla
+        if len(chunks) > 8: continue
             
-        # Kartın içindeki en uzun metin her zaman haberin asıl başlığıdır
         title = max(chunks, key=len)
-        
-        # Başlık çok kısaysa menü linkidir, atla
         if len(title) < 25: continue
             
-        # Gözden kaçan istenmeyen idari menü kelimelerini filtrele
         ignore_words = ["rektör", "sekreterlik", "danışmanları", "kalem müdürlüğü", "tanıtım filmi", "faaliyetler"]
         if any(w in title.lower() for w in ignore_words) and len(title) < 60:
             continue
@@ -88,7 +82,6 @@ def generate_rss(name, url, page):
             fe.id(full_link)
             fe.title(title)
             
-            # Karttaki DİĞER bilgileri (Tarih, Bölüm adı) alt alta çok şık bir açıklama olarak ekle
             details = [c for c in chunks if c != title]
             if details:
                 desc_html = "<br/>".join([f"• {c}" for c in details])
@@ -98,8 +91,8 @@ def generate_rss(name, url, page):
             fe.description(desc_html)
             fe.link(href=full_link)
             
-            tz = pytz.timezone('Europe/Istanbul')
-            fe.published(datetime.now(tz)) 
+            # BURASI ÖNEMLİ: Her yeni haberde süreyi 1 dakika geriye alıyoruz
+            fe.published(base_time - timedelta(minutes=count)) 
             
             count += 1
             if count >= 15:
