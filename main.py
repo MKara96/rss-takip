@@ -6,26 +6,21 @@ import pytz
 from datetime import datetime, timedelta
 import re
 
-# --- AKADEMİK VE EDİTORYAL GÖRSEL ÜRETİCİ (GERÇEK PNG LİNKLERİ) ---
-def generate_editorial_image(category_key):
-    # Akademik Renkler: Lacivert, Bordo, Koyu Orman Yeşili, Koyu Mor, Derin Turkuaz
-    themes = {
-        "mku_haberler": {"bg": "0f172a", "title": "MKU+HABERLERI"},
-        "mku_duyurular": {"bg": "7f1d1d", "title": "MKU+DUYURULARI"},
-        "egitim_haberler": {"bg": "14532d", "title": "EGITIM+FAKULTESI%0AHABERLERI"},
-        "egitim_duyurular": {"bg": "14532d", "title": "EGITIM+FAKULTESI%0ADUYURULARI"},
-        "sosyal_bilimler_haberler": {"bg": "4c1d95", "title": "SOSYAL+BILIMLER%0AHABERLERI"},
-        "sosyal_bilimler_duyurular": {"bg": "4c1d95", "title": "SOSYAL+BILIMLER%0ADUYURULARI"},
-        "turkce_ogrt_haberler": {"bg": "134e4a", "title": "TURKCE+OGRETMENLIGI%0AHABERLERI"},
-        "turkce_ogrt_duyurular": {"bg": "134e4a", "title": "TURKCE+OGRETMENLIGI%0ADUYURULARI"}
-    }
-    t = themes.get(category_key, {"bg": "1e293b", "title": "AKADEMIK+DUYURU"})
-    
-    # URL formatında boşluklar ve satır atlamalar (%0A)
-    text = f"T.C.+HATAY+MUSTAFA+KEMAL+UNIVERSITESI%0A%0A---%0A%0A{t['title']}%0A%0A---%0A%0AResmi+Akademik+Bulten"
-    
-    # Gerçek PNG resmi üreten ve RSS okuyucuların kapağa sorunsuz alacağı link (Playfair Display akademik fontu ile)
-    return f"https://placehold.co/800x400/{t['bg']}/f8fafc/png?text={text}&font=Playfair+Display"
+# --- GERÇEK EDİTORYAL FOTOĞRAFLAR (Yüksek Çözünürlüklü Akademik Görseller) ---
+# Tasarım hissini bilgisayar çizimlerinden çıkarıp, gerçek "Haber Sitesi" standardına taşıyoruz.
+EDITORIAL_IMAGES = {
+    "mku_haberler": "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&w=800&q=80", # Kampüs / Üniversite Binası
+    "mku_duyurular": "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=800&q=80", # Akademik Mezuniyet / Duyuru
+    "egitim_haberler": "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=800&q=80", # Kitaplar ve Çalışma Masası
+    "egitim_duyurular": "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=800&q=80", # Kütüphane İçi
+    "sosyal_bilimler_haberler": "https://images.unsplash.com/photo-1455390582262-044cdead2708?auto=format&fit=crop&w=800&q=80", # Kalem, Kağıt, Sosyal Bilimler
+    "sosyal_bilimler_duyurular": "https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&w=800&q=80", # Kitap Sayfaları
+    "turkce_ogrt_haberler": "https://images.unsplash.com/photo-1474932430478-367d16b99031?auto=format&fit=crop&w=800&q=80", # Daktilo ve Edebiyat
+    "turkce_ogrt_duyurular": "https://images.unsplash.com/photo-1455849318743-b2233052fcff?auto=format&fit=crop&w=800&q=80"  # Defter, Öğretmenlik
+}
+
+def get_fallback_image(category_key):
+    return EDITORIAL_IMAGES.get(category_key, "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&w=800&q=80")
 
 # --- TARİH İŞLEME ---
 AYLAR = {"Ocak":"01","Şubat":"02","Mart":"03","Nisan":"04","Mayıs":"05","Haziran":"06",
@@ -68,28 +63,31 @@ def generate_rss(name, url, page):
         link = item['href']
         if len(link) < 3 or link.startswith(('#', 'javascript', 'mailto', 'tel')): continue
         
-        # BİLGİ OKUMA SORUNU ÇÖZÜMÜ: Sadece linki değil, kapsayıcı kutuyu genişletiyoruz
-        parent = item.find_parent('div')
-        if not parent: continue
+        # --- İÇERİK METNİ (BODY) BULMA SORUNU ÇÖZÜLDÜ ---
+        # Bot artık sadece linke değil, haberi kapsayan tüm geniş kutuya bakıyor.
+        card = item.find_parent('div')
+        if not card: continue
         
-        # Eğer kutu çok küçükse (sadece başlık varsa), bir üst kutuya çıkıp tüm metni al
-        if len(parent.get_text(strip=True)) < 40 and parent.parent and parent.parent.name == 'div':
-            parent = parent.parent
+        # Kutu çok dar ise (içinde sadece başlık varsa), tüm metni almak için bir üst kutuya çık.
+        if len(card.get_text(strip=True)) < 50 and card.parent and card.parent.name == 'div':
+            card = card.parent
+        if len(card.get_text(strip=True)) < 50 and card.parent and card.parent.name == 'div':
+            card = card.parent
             
-        raw_text = parent.get_text(separator=' | ', strip=True)
+        raw_text = card.get_text(separator=' | ', strip=True)
         chunks = [c.strip() for c in raw_text.split(' | ') if len(c.strip()) > 3]
         if not chunks: continue
         
-        # En mantıklı başlığı bul
+        # En uzun metin her zaman haberin asıl başlığı/özetidir
         link_text = item.get_text(strip=True)
-        title = link_text if len(link_text) > 15 else max(chunks, key=len)
+        title = link_text if len(link_text) > 20 else max(chunks, key=len)
         if len(title) < 20: continue
 
         full_link = "https://mku.edu.tr/" + link.lstrip('/') if not link.startswith('http') else link
         if "mku.edu.tr" not in full_link or full_link in added_links: continue
 
         # --- RESİM SEÇİMİ ---
-        img_tag = parent.find('img')
+        img_tag = card.find('img')
         img_url = ""
         is_real_image = False
         
@@ -100,32 +98,37 @@ def generate_rss(name, url, page):
             is_real_image = True
         
         if not is_real_image:
-            img_url = generate_editorial_image(name)
+            img_url = get_fallback_image(name)
 
         tarih_obj = tr_tarih_isle(raw_text)
         added_links.add(full_link)
         
         fe = fg.add_entry()
         
-        # CACHE HİLESİ: RSS Okuyucunun tasarımları hemen çekmesi için linke #v2 ekledik
-        fe.id(full_link + "#v2")
+        # RESET KODU: RSS Okuyucunun hatalı görünümleri unutup yeni görselleri çekmesi için zorunlu ID değişimi
+        fe.id(full_link + "#editoryal-v1")
         fe.link(href=full_link)
         fe.title(title)
         
-        # KAPAK FOTOĞRAFI (Artık %100 her okuyucuda kapağa düşecek)
-        fe.enclosure(img_url, 0, 'image/png')
+        # KAPAK FOTOĞRAFI (RSS Bloğunda kesin görünecek kod)
+        fe.enclosure(img_url, 0, 'image/jpeg')
         
-        # DETAYLI AÇIKLAMA: Bilgilerin madde madde okunduğu yer
-        desc_html = f'<img src="{img_url}" style="width:100%; border-radius:4px; margin-bottom:15px;"/><br/>'
-        desc_html += "<b>Duyuru Detayları:</b><br/>"
+        # --- ZENGİN EDİTORYAL İÇERİK METNİ ---
+        detaylar = [c for c in chunks if c != title and c != link_text and len(c) < 100]
         
-        # Başlık haricindeki tüm detayları (Tarih, Bölüm) alt alta yazdırıyoruz
-        detaylar = [c for c in chunks if c != title]
+        desc_html = f'<img src="{img_url}" style="width:100%; max-width:800px; border-radius:8px; margin-bottom:15px;"/><br/>'
+        desc_html += f'<div style="font-family: sans-serif; color: #334155; font-size: 15px; line-height: 1.6;">'
+        desc_html += f'<p><b>Haber Özeti:</b><br/>{title}</p>'
+        
         if detaylar:
+            desc_html += '<hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 15px 0;"/>'
+            desc_html += '<p><b>Birim & Tarih Bilgileri:</b><br/>'
             desc_html += "<br/>".join([f"• {c}" for c in detaylar])
-        else:
-            desc_html += "• " + raw_text[:200] + "..."
+            desc_html += '</p>'
             
+        desc_html += f'<br/><a href="{full_link}" style="color: #2563eb; text-decoration: none; font-weight: 600;">Haberi Sitede Görüntüle ➔</a>'
+        desc_html += '</div>'
+        
         fe.description(desc_html)
         fe.published(base_time - timedelta(minutes=count)) 
         
