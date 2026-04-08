@@ -11,9 +11,6 @@ from io import BytesIO
 
 # --- 1. GERÇEK AKADEMİK KAPAK ÇİZİM MOTORU ---
 def generate_academic_cover(category_key, title_text, bg_color_hex):
-    if not os.path.exists('rss_files'):
-        os.makedirs('rss_files')
-        
     img_path = f"rss_files/{category_key}.png"
     width, height = 800, 400
     
@@ -21,14 +18,13 @@ def generate_academic_cover(category_key, title_text, bg_color_hex):
     img = Image.new('RGB', (width, height), color=bg_color)
     draw = ImageDraw.Draw(img)
     
-    # Font indirme işlemine güvenlik kalkanı (Hata verirse çökmez, standart fonta geçer)
     try:
         font_url = "https://github.com/google/fonts/raw/main/ofl/merriweather/Merriweather-Bold.ttf"
         font_bytes = requests.get(font_url, timeout=10).content
         font_main = ImageFont.truetype(BytesIO(font_bytes), 42)
         font_sub = ImageFont.truetype(BytesIO(font_bytes), 18)
     except Exception as e:
-        print(f"Font indirilemedi, standart font kullanılıyor: {e}")
+        print(f"Font hatası (Standart fonta geçildi): {e}")
         font_main = ImageFont.load_default()
         font_sub = ImageFont.load_default()
 
@@ -53,8 +49,6 @@ def generate_academic_cover(category_key, title_text, bg_color_hex):
     draw.text(((width - (bbox[2]-bbox[0])) / 2, height - 80), footer_text, fill="#94a3b8", font=font_sub)
     
     img.save(img_path)
-    
-    # Resim URL'sini senin GitHub depona göre sabitledik
     return f"https://raw.githubusercontent.com/MKara96/rss-takip/main/{img_path}"
 
 THEMES = {
@@ -68,7 +62,6 @@ THEMES = {
     "turkce_ogrt_duyurular": {"title": "TÜRKÇE ÖĞRETMENLİĞİ\nDUYURULARI", "color": "#134e4a"}
 }
 
-# --- 2. TARİH İŞLEME ---
 AYLAR = {"Ocak":"01","Şubat":"02","Mart":"03","Nisan":"04","Mayıs":"05","Haziran":"06",
          "Temmuz":"07","Ağustos":"08","Eylül":"09","Ekim":"10","Kasım":"11","Aralık":"12"}
 
@@ -84,7 +77,6 @@ def tr_tarih_isle(tarih_str):
     except: pass
     return datetime.now(pytz.timezone('Europe/Istanbul'))
 
-# --- 3. METİN OKUMA VE RSS OLUŞTURMA ---
 def generate_rss(name, url, page):
     print(f"{name} taranıyor...")
     try:
@@ -92,7 +84,7 @@ def generate_rss(name, url, page):
         page.wait_for_timeout(4000)
         html_content = page.content()
     except Exception as e: 
-        print(f"Sayfa yükleme hatası: {e}")
+        print(f"Sayfa yükleme hatası ({name}): {e}")
         return
 
     soup = BeautifulSoup(html_content, 'html.parser')
@@ -144,7 +136,7 @@ def generate_rss(name, url, page):
         added_links.add(full_link)
         
         fe = fg.add_entry()
-        fe.id(full_link + "#final-v3")
+        fe.id(full_link + "#final-v4")
         fe.link(href=full_link)
         fe.title(title)
         
@@ -166,30 +158,34 @@ def generate_rss(name, url, page):
         count += 1
         if count >= 15: break
 
-    if not os.path.exists('rss_files'): os.makedirs('rss_files')
     fg.rss_file(f"rss_files/{name}.xml")
     print(f"Başarıyla tamamlandı: {name}")
 
 def main():
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(user_agent="Mozilla/5.0 Chrome/120.0 Safari/537.36")
-        page = context.new_page()
-        
-        URLS = {
-            "mku_haberler": "https://mku.edu.tr/newslist",
-            "mku_duyurular": "https://mku.edu.tr/announcements",
-            "egitim_haberler": "https://mku.edu.tr/departments/8/newsList",
-            "egitim_duyurular": "https://mku.edu.tr/departments/8/announcements",
-            "sosyal_bilimler_haberler": "https://mku.edu.tr/departments/121/newsList",
-            "sosyal_bilimler_duyurular": "https://mku.edu.tr/departments/121/announcements",
-            "turkce_ogrt_haberler": "https://mku.edu.tr/departments/1488/newsList",
-            "turkce_ogrt_duyurular": "https://mku.edu.tr/departments/1488/announcements"
-        }
-        
-        for name, url in URLS.items():
-            generate_rss(name, url, page)
+    os.makedirs('rss_files', exist_ok=True) # Güvenlik Kilidi: Klasörü en başta kesinlikle oluştur
+    
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(user_agent="Mozilla/5.0 Chrome/120.0 Safari/537.36")
+            page = context.new_page()
             
-        browser.close()
+            URLS = {
+                "mku_haberler": "https://mku.edu.tr/newslist",
+                "mku_duyurular": "https://mku.edu.tr/announcements",
+                "egitim_haberler": "https://mku.edu.tr/departments/8/newsList",
+                "egitim_duyurular": "https://mku.edu.tr/departments/8/announcements",
+                "sosyal_bilimler_haberler": "https://mku.edu.tr/departments/121/newsList",
+                "sosyal_bilimler_duyurular": "https://mku.edu.tr/departments/121/announcements",
+                "turkce_ogrt_haberler": "https://mku.edu.tr/departments/1488/newsList",
+                "turkce_ogrt_duyurular": "https://mku.edu.tr/departments/1488/announcements"
+            }
+            
+            for name, url in URLS.items():
+                generate_rss(name, url, page)
+                
+            browser.close()
+    except Exception as e:
+        print(f"Sistem Kritik Hatası: {e}")
 
 if __name__ == "__main__": main()
