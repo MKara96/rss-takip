@@ -5,14 +5,37 @@ import os
 import pytz
 from datetime import datetime
 import re
+import urllib.parse
 
 # Ay isimlerini sayıya çevirmek için sözlük
 AYLAR = {"Ocak":"01","Şubat":"02","Mart":"03","Nisan":"04","Mayıs":"05","Haziran":"06",
          "Temmuz":"07","Ağustos":"08","Eylül":"09","Ekim":"10","Kasım":"11","Aralık":"12"}
 
+URLS = {
+    "mku_haberler": "https://mku.edu.tr/newslist",
+    "mku_duyurular": "https://mku.edu.tr/announcements",
+    "egitim_haberler": "https://mku.edu.tr/departments/8/newsList",
+    "egitim_duyurular": "https://mku.edu.tr/departments/8/announcements",
+    "sosyal_bilimler_haberler": "https://mku.edu.tr/departments/121/newsList",
+    "sosyal_bilimler_duyurular": "https://mku.edu.tr/departments/121/announcements",
+    "turkce_ogrt_haberler": "https://mku.edu.tr/departments/1488/newsList",
+    "turkce_ogrt_duyurular": "https://mku.edu.tr/departments/1488/announcements"
+}
+
+# HER KATEGORİ İÇİN ÖZEL VARSAYILAN RESİMLER (Estetik Renk Kodlarıyla)
+VARSAYILAN_RESIMLER = {
+    "mku_haberler": "https://placehold.co/800x400/1E3A8A/FFFFFF/png?text=MKU+Haberler&font=Montserrat", # Koyu Mavi
+    "mku_duyurular": "https://placehold.co/800x400/B91C1C/FFFFFF/png?text=MKU+Duyurular&font=Montserrat", # Koyu Kırmızı
+    "egitim_haberler": "https://placehold.co/800x400/047857/FFFFFF/png?text=Egitim+Fakultesi\nHaberler&font=Montserrat", # Zümrüt Yeşili
+    "egitim_duyurular": "https://placehold.co/800x400/047857/FFFFFF/png?text=Egitim+Fakultesi\nDuyurular&font=Montserrat",
+    "sosyal_bilimler_haberler": "https://placehold.co/800x400/6D28D9/FFFFFF/png?text=Sosyal+Bilimler\nHaberler&font=Montserrat", # Mor
+    "sosyal_bilimler_duyurular": "https://placehold.co/800x400/6D28D9/FFFFFF/png?text=Sosyal+Bilimler\nDuyurular&font=Montserrat",
+    "turkce_ogrt_haberler": "https://placehold.co/800x400/0F766E/FFFFFF/png?text=Turkce+Ogretmenligi\nHaberler&font=Montserrat", # Turkuaz
+    "turkce_ogrt_duyurular": "https://placehold.co/800x400/0F766E/FFFFFF/png?text=Turkce+Ogretmenligi\nDuyurular&font=Montserrat"
+}
+
 def tr_tarih_isle(tarih_str):
     try:
-        # Metin içindeki tarihi (örn: 7 Nisan 2026) bulur
         for tr_ay, sayi_ay in AYLAR.items():
             if tr_ay in tarih_str:
                 tarih_str = tarih_str.replace(tr_ay, sayi_ay)
@@ -55,12 +78,19 @@ def generate_rss(name, url, page):
         full_link = "https://mku.edu.tr/" + link.lstrip('/') if not link.startswith('http') else link
         if "mku.edu.tr" not in full_link or full_link in added_links: continue
 
-        # --- RESİM VE TARİH ---
+        # --- RESİM VE YEDEK RESİM KONTROLÜ ---
         img_tag = parent.find('img')
         img_url = ""
+        
+        # 1. Sitede resim var mı diye bak
         if img_tag and img_tag.get('src'):
             img_url = img_tag['src']
-            if not img_url.startswith('http'): img_url = "https://mku.edu.tr/" + img_url.lstrip('/')
+            if not img_url.startswith('http'): 
+                img_url = "https://mku.edu.tr/" + img_url.lstrip('/')
+                
+        # 2. Eğer sitede resim yoksa, bizim tasarladığımız yedek resmi kullan
+        if not img_url:
+            img_url = VARSAYILAN_RESIMLER.get(name, "https://placehold.co/800x400/333333/FFFFFF/png?text=MKU+Duyuru")
 
         tarih_obj = tr_tarih_isle(full_text)
         added_links.add(full_link)
@@ -69,13 +99,12 @@ def generate_rss(name, url, page):
         fe.id(full_link)
         fe.link(href=full_link)
         
-        # Başlık ayıklama
         text_parts = [t.strip() for t in full_text.split('  ') if len(t.strip()) > 10]
         fe.title(max(text_parts, key=len) if text_parts else "Yeni Duyuru")
         
-        # Açıklama içeriği (Resim + Metin)
+        # Açıklama içeriği
         desc = ""
-        if img_url: desc += f'<img src="{img_url}" style="width:100%; margin-bottom:10px;"/><br/>'
+        if img_url: desc += f'<img src="{img_url}" style="width:100%; border-radius:8px; margin-bottom:12px;"/><br/>'
         desc += f"<b>Detay:</b> {full_text[:300]}..."
         fe.description(desc)
         
@@ -96,16 +125,5 @@ def main():
         for name, url in URLS.items():
             generate_rss(name, url, page)
         browser.close()
-
-URLS = {
-    "mku_haberler": "https://mku.edu.tr/newslist",
-    "mku_duyurular": "https://mku.edu.tr/announcements",
-    "egitim_haberler": "https://mku.edu.tr/departments/8/newsList",
-    "egitim_duyurular": "https://mku.edu.tr/departments/8/announcements",
-    "sosyal_bilimler_haberler": "https://mku.edu.tr/departments/121/newsList",
-    "sosyal_bilimler_duyurular": "https://mku.edu.tr/departments/121/announcements",
-    "turkce_ogrt_haberler": "https://mku.edu.tr/departments/1488/newsList",
-    "turkce_ogrt_duyurular": "https://mku.edu.tr/departments/1488/announcements"
-}
 
 if __name__ == "__main__": main()
