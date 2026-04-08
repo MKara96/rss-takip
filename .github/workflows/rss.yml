@@ -13,18 +13,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4 # Güncel versiyon
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v5 # Güncel versiyon
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
       - name: Install dependencies
-        # requirements.txt'ye gerek kalmadan her şeyi zorla ve eksiksiz kuruyoruz
         run: |
           pip install requests beautifulsoup4 feedgen pytz playwright Pillow
-          playwright install chromium
+          playwright install --with-deps chromium
 
       - name: Run scraper
         run: python main.py
@@ -33,6 +32,7 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          mkdir -p rss_files
           git add rss_files/
           git diff --quiet && git diff --staged --quiet || git commit -m "RSS ve resimler guncellendi"
           git push
