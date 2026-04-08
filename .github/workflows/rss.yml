@@ -2,7 +2,7 @@ name: MKU RSS Guncelleme
 
 on:
   schedule:
-    - cron: '0 */4 * * *'
+    - cron: '0 6,18 * * *' # Türkiye saatiyle yaklaşık 09:00 ve 21:00'de çalışır
   workflow_dispatch:
 
 permissions:
