@@ -3,11 +3,11 @@ from bs4 import BeautifulSoup
 from feedgen.feed import FeedGenerator
 import os
 import pytz
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 import base64
 
-# --- 8 KATEGORİ İÇİN RESMİ 'GÜNCELLEME/BİLDİRİ' TASARIMLARI ---
+# --- 8 KATEGORİ İÇİN RESMİ 'RESMİ BİLDİRİ / UPDATE' TASARIMLARI (SVG) ---
 THEMES = {
     "mku_haberler": {"top": "MKÜ", "bottom": "HABERLERİ", "color": "#0ea5e9", "badge": "📰 HABER BÜLTENİ"},
     "mku_duyurular": {"top": "MKÜ", "bottom": "DUYURULARI", "color": "#ef4444", "badge": "📌 RESMİ DUYURU"},
@@ -20,8 +20,8 @@ THEMES = {
 }
 
 def generate_update_svg(category_key):
-    """Modern, resmi bir sistem bildirisi kapağı üretir."""
-    t = THEMES.get(category_key, {"top": "SİSTEM", "bottom": "BİLDİRİSİ", "color": "#64748b", "badge": "⚡ BİLGİLENDİRME"})
+    """Modern, resmi bir sistem bildirisi/update kapağı üretir."""
+    t = THEMES.get(category_key, {"top": "MKÜ", "bottom": "DÖKÜMANI", "color": "#64748b", "badge": "⚡ BİLGİLENDİRME"})
     
     # Modern, koyu tema bildiri kartı tasarımı
     svg = f"""
@@ -45,7 +45,7 @@ def generate_update_svg(category_key):
         <rect x="60" y="120" width="220" height="36" rx="6" fill="{t['color']}" fill-opacity="0.15" stroke="{t['color']}" stroke-width="1"/>
         <text x="170" y="144" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="bold" fill="{t['color']}" text-anchor="middle" letter-spacing="1">{t['badge']}</text>
         
-        <text x="60" y="230" font-family="system-ui, -apple-system, sans-serif" font-size="38" font-weight="800" fill="#f8fafc" letter-spacing="1">{t['top']}</text>
+        <text x="60" y="230" font-family="'Times New Roman', Times, serif" font-size="38" font-weight="800" fill="#f8fafc" letter-spacing="1">{t['top']}</text>
         <text x="60" y="280" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="300" fill="#cbd5e1" letter-spacing="2">{t['bottom']}</text>
         
         <line x1="60" y1="330" x2="740" y2="330" stroke="#334155" stroke-width="1"/>
@@ -55,6 +55,7 @@ def generate_update_svg(category_key):
     encoded = base64.b64encode(svg.encode('utf-8')).decode('utf-8')
     return f"data:image/svg+xml;base64,{encoded}"
 
+# --- TARİH VE BOT MANTIĞI ---
 AYLAR = {"Ocak":"01","Şubat":"02","Mart":"03","Nisan":"04","Mayıs":"05","Haziran":"06",
          "Temmuz":"07","Ağustos":"08","Eylül":"09","Ekim":"10","Kasım":"11","Aralık":"12"}
 
@@ -85,10 +86,14 @@ def generate_rss(name, url, page):
     
     fg = FeedGenerator()
     fg.id(url); fg.title(name.upper().replace('_', ' ')); fg.link(href=url, rel='alternate'); fg.language('tr')
-    fg.description(f'MKÜ {name.replace("_", " ").title()} Resmi Bildiri Akışı')
+    fg.description(f'Hatay Mustafa Kemal Üniversitesi {name.replace("_", " ").title()} Akademik Yayını')
 
     added_links = set()
     count = 0
+    
+    # Zaman hilesi için o anki saati sabitliyoruz
+    tz = pytz.timezone('Europe/Istanbul')
+    base_time = datetime.now(tz)
     
     for item in soup.find_all('a', href=True):
         link = item['href']
@@ -101,18 +106,19 @@ def generate_rss(name, url, page):
         full_link = "https://mku.edu.tr/" + link.lstrip('/') if not link.startswith('http') else link
         if "mku.edu.tr" not in full_link or full_link in added_links: continue
 
-        # --- RESİM SEÇİMİ ---
+        # --- RESİM SEÇİMİ VE OTOMATİK THUMBNAIL ENTEGRASYONU ---
         img_tag = parent.find('img')
         img_url = ""
         is_real_image = False
         
+        # 1. Sitede resim var mı diye bak (Gerçek ise Thumbnail olarak ayarla)
         if img_tag and img_tag.get('src'):
             img_url = img_tag['src']
             if not img_url.startswith('http'): 
                 img_url = "https://mku.edu.tr/" + img_url.lstrip('/')
             is_real_image = True
         
-        # Gerçek resim yoksa sistem bildirisi üret!
+        # 2. Gerçek resim yoksa, kategorisine özel Resmi Bildiri üret!
         if not is_real_image:
             img_url = generate_update_svg(name)
 
@@ -124,28 +130,29 @@ def generate_rss(name, url, page):
         fe.link(href=full_link)
         
         # --- KAPAK FOTOĞRAFI KODU (ENCLOSURE) ---
-        # Siteden çekilen gerçek resimse RSS Thumbnail standartlarına ekliyoruz.
+        # Siteden çekilen gerçek resimse RSS okuyucun kapağa çeker.
         if is_real_image:
             fe.enclosure(img_url, 0, 'image/jpeg')
         
         text_parts = [t.strip() for t in full_text.split('  ') if len(t.strip()) > 10]
-        fe.title(max(text_parts, key=len) if text_parts else "Yeni Duyuru")
+        fe.title(max(text_parts, key=len) if text_parts else "Yeni Akademik Duyuru")
         
-        # Açıklama (Her ihtimale karşı resmi metnin en üstüne de koyuyoruz)
-        desc = f'<img src="{img_url}" style="width:100%; max-width: 800px; border-radius:8px; border: 1px solid #e2e8f0; margin-bottom:15px;"/><br/>'
-        desc += f"<div style='font-family: sans-serif; color: #334155;'>"
-        desc += f"<b style='color:#0f172a;'>Kategori:</b> {name.replace('_', ' ').upper()}<br/><br/>"
-        desc += f"<b style='color:#0f172a;'>Özet Metin:</b><br/> {full_text[:350]}..."
+        # --- AÇIKLAMA (Resmi Update Görselini en başa koyuyoruz) ---
+        desc = f'<img src="{img_url}" style="width:100%; border-radius:10px; border: 1px solid #e2e8f0; margin-bottom:15px;"/><br/>'
+        desc += f"<div style='font-family: serif; font-size: 15px; color: #334155;'>"
+        desc += f"<b style='color:#0f172a; font-family: system-ui;'>Kategori:</b> {name.replace('_', ' ').upper()}<br/><br/>"
+        desc += f"<b style='color:#0f172a; font-family: system-ui;'>Özet Döküman Metni:</b><br/> {full_text[:350]}..."
         desc += "</div>"
         fe.description(desc)
         
-        fe.published(tarih_obj)
+        fe.published(base_time - timedelta(minutes=count)) 
         
         count += 1
         if count >= 15: break
 
     if not os.path.exists('rss_files'): os.makedirs('rss_files')
     fg.rss_file(f"rss_files/{name}.xml")
+    print(f"Bitti: {name}")
 
 def main():
     with sync_playwright() as p:
