@@ -9,7 +9,7 @@ from playwright.sync_api import sync_playwright
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 
-# --- 1. GERÇEK AKADEMİK KAPAK ÇİZİM MOTORU (Yüzde Yüz Çalışır) ---
+# --- 1. GERÇEK AKADEMİK KAPAK ÇİZİM MOTORU ---
 def generate_academic_cover(category_key, title_text, bg_color_hex):
     if not os.path.exists('rss_files'):
         os.makedirs('rss_files')
@@ -17,34 +17,30 @@ def generate_academic_cover(category_key, title_text, bg_color_hex):
     img_path = f"rss_files/{category_key}.png"
     width, height = 800, 400
     
-    # Renk kodunu dönüştür
     bg_color = tuple(int(bg_color_hex.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
     img = Image.new('RGB', (width, height), color=bg_color)
     draw = ImageDraw.Draw(img)
     
-    # Akademik bir font indiriyoruz (Merriweather Bold)
+    # Font indirme işlemine güvenlik kalkanı (Hata verirse çökmez, standart fonta geçer)
     try:
         font_url = "https://github.com/google/fonts/raw/main/ofl/merriweather/Merriweather-Bold.ttf"
-        font_bytes = requests.get(font_url).content
+        font_bytes = requests.get(font_url, timeout=10).content
         font_main = ImageFont.truetype(BytesIO(font_bytes), 42)
         font_sub = ImageFont.truetype(BytesIO(font_bytes), 18)
-    except:
+    except Exception as e:
+        print(f"Font indirilemedi, standart font kullanılıyor: {e}")
         font_main = ImageFont.load_default()
         font_sub = ImageFont.load_default()
 
-    # Estetik Çerçeve
     draw.rectangle([20, 20, width-20, height-20], outline="#ffffff", width=2)
     draw.rectangle([30, 30, width-30, height-30], outline="rgba(255,255,255,0.4)", width=1)
     
-    # Üst Kurum Yazısı
     top_text = "T.C. HATAY MUSTAFA KEMAL ÜNİVERSİTESİ"
     bbox = draw.textbbox((0, 0), top_text, font=font_sub)
     draw.text(((width - (bbox[2]-bbox[0])) / 2, 70), top_text, fill="#e2e8f0", font=font_sub)
     
-    # Ayırıcı Çizgi
     draw.line([(width/2 - 60, 110), (width/2 + 60, 110)], fill="#ffffff", width=2)
     
-    # Ana Başlık (Fakülte/Duyuru İsmi)
     lines = title_text.split('\n')
     y_text = 160
     for line in lines:
@@ -52,26 +48,23 @@ def generate_academic_cover(category_key, title_text, bg_color_hex):
         draw.text(((width - (bbox[2]-bbox[0])) / 2, y_text), line, fill="#ffffff", font=font_main)
         y_text += (bbox[3]-bbox[1]) + 15
         
-    # Alt Etiket
     footer_text = "RESMİ BİLGİLENDİRME SİSTEMİ"
     bbox = draw.textbbox((0, 0), footer_text, font=font_sub)
     draw.text(((width - (bbox[2]-bbox[0])) / 2, height - 80), footer_text, fill="#94a3b8", font=font_sub)
     
     img.save(img_path)
     
-    # Çizdiğimiz bu resmi RSS okuyucuya doğrudan GitHub linkiyle servis ediyoruz!
-    repo = os.environ.get('GITHUB_REPOSITORY', 'mku/rss')
-    return f"https://raw.githubusercontent.com/{repo}/main/{img_path}"
+    # Resim URL'sini senin GitHub depona göre sabitledik
+    return f"https://raw.githubusercontent.com/MKara96/rss-takip/main/{img_path}"
 
-# KATEGORİ TEMALARI (Kurumsal Renkler)
 THEMES = {
-    "mku_haberler": {"title": "MKÜ HABER BÜLTENİ", "color": "#0f172a"}, # Koyu Lacivert
-    "mku_duyurular": {"title": "MKÜ RESMİ DUYURULARI", "color": "#7f1d1d"}, # Koyu Bordo
-    "egitim_haberler": {"title": "EĞİTİM FAKÜLTESİ\nHABERLERİ", "color": "#14532d"}, # Orman Yeşili
+    "mku_haberler": {"title": "MKÜ HABER BÜLTENİ", "color": "#0f172a"}, 
+    "mku_duyurular": {"title": "MKÜ RESMİ DUYURULARI", "color": "#7f1d1d"}, 
+    "egitim_haberler": {"title": "EĞİTİM FAKÜLTESİ\nHABERLERİ", "color": "#14532d"}, 
     "egitim_duyurular": {"title": "EĞİTİM FAKÜLTESİ\nDUYURULARI", "color": "#14532d"},
-    "sosyal_bilimler_haberler": {"title": "SOSYAL BİLİMLER\nHABERLERİ", "color": "#4c1d95"}, # Koyu Mor
+    "sosyal_bilimler_haberler": {"title": "SOSYAL BİLİMLER\nHABERLERİ", "color": "#4c1d95"}, 
     "sosyal_bilimler_duyurular": {"title": "SOSYAL BİLİMLER\nDUYURULARI", "color": "#4c1d95"},
-    "turkce_ogrt_haberler": {"title": "TÜRKÇE ÖĞRETMENLİĞİ\nHABERLERİ", "color": "#134e4a"}, # Derin Turkuaz
+    "turkce_ogrt_haberler": {"title": "TÜRKÇE ÖĞRETMENLİĞİ\nHABERLERİ", "color": "#134e4a"}, 
     "turkce_ogrt_duyurular": {"title": "TÜRKÇE ÖĞRETMENLİĞİ\nDUYURULARI", "color": "#134e4a"}
 }
 
@@ -98,7 +91,9 @@ def generate_rss(name, url, page):
         page.goto(url, timeout=60000, wait_until="networkidle")
         page.wait_for_timeout(4000)
         html_content = page.content()
-    except Exception as e: return
+    except Exception as e: 
+        print(f"Sayfa yükleme hatası: {e}")
+        return
 
     soup = BeautifulSoup(html_content, 'html.parser')
     for element in soup(["header", "footer", "nav", "aside", "script", "style"]): 
@@ -108,7 +103,6 @@ def generate_rss(name, url, page):
     fg.id(url); fg.title(THEMES[name]["title"].replace('\n', ' ')); fg.link(href=url, rel='alternate'); fg.language('tr')
     fg.description(f'{THEMES[name]["title"].replace(chr(10), " ")} Akademik Akışı')
 
-    # Resmi bir kez çiz ve URL'sini al
     kapak_resmi_url = generate_academic_cover(name, THEMES[name]["title"], THEMES[name]["color"])
 
     added_links = set()
@@ -123,26 +117,23 @@ def generate_rss(name, url, page):
         full_link = "https://mku.edu.tr/" + link.lstrip('/') if not link.startswith('http') else link
         if "mku.edu.tr" not in full_link or full_link in added_links: continue
 
-        # İÇERİK OKUMA SORUNU ÇÖZÜLDÜ: Linkin etrafındaki tüm kartı buluyoruz
         parent = item
-        for _ in range(4): # Kutuyu kapsayana kadar 4 seviye yukarı çık
+        for _ in range(4): 
             if parent.parent and parent.parent.name not in ['body', 'html', 'main']:
-                if len(parent.parent.get_text(strip=True)) < 800: # Tüm sayfayı almamak için sınır
+                if len(parent.parent.get_text(strip=True)) < 800: 
                     parent = parent.parent
                 else: break
 
         raw_text = parent.get_text(separator=' | ', strip=True)
-        raw_text = re.sub(r'(\|\s*)+', '| ', raw_text) # Fazla ayırıcıları temizle
+        raw_text = re.sub(r'(\|\s*)+', '| ', raw_text) 
         chunks = [c.strip() for c in raw_text.split('|') if len(c.strip()) > 3]
         if not chunks: continue
         
-        # Gerçek başlığı bul
         link_text = item.get_text(strip=True)
         title = link_text if len(link_text) > 15 else max(chunks, key=len)
         if len(title) < 15: continue
         if any(w in title.lower() for w in ['ana sayfa', 'iletişim', 'hakkımızda']): continue
 
-        # Sitedeki gerçek resmi bul, yoksa çizdiğimiz PNG'yi kullan
         img_tag = parent.find('img')
         img_url = kapak_resmi_url
         if img_tag and img_tag.get('src'):
@@ -153,16 +144,12 @@ def generate_rss(name, url, page):
         added_links.add(full_link)
         
         fe = fg.add_entry()
-        
-        # CACHE TEMİZLEME: RSS okuyucunun eski hatalı önbelleği silmesi için ID'yi zorla değiştirdik
-        fe.id(full_link + "#final-v2")
+        fe.id(full_link + "#final-v3")
         fe.link(href=full_link)
         fe.title(title)
         
-        # KAPAK (THUMBNAIL) RESMİ - %100 Garantili
         fe.enclosure(img_url, 0, 'image/png')
         
-        # EKSİKSİZ AÇIKLAMA METNİ
         detaylar = [c for c in chunks if c != title and c != link_text and len(c) < 150]
         
         desc_html = f'<img src="{img_url}" style="width:100%; border-radius:6px; margin-bottom:15px;"/><br/>'
@@ -174,8 +161,6 @@ def generate_rss(name, url, page):
             
         desc_html += '</div>'
         fe.description(desc_html)
-        
-        # Habere doğru sırayı ver
         fe.published(base_time - timedelta(minutes=count)) 
         
         count += 1
