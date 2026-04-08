@@ -5,34 +5,52 @@ import os
 import pytz
 from datetime import datetime
 import re
-import urllib.parse
+import base64
 
-# Ay isimlerini sayıya çevirmek için sözlük
+# --- AKADEMİK TASARIM AYARLARI ---
+# Renkler: Navy, Burgundy, Forest Green, Deep Teal, Slate
+THEMES = {
+    "mku_haberler": {"bg": "#002147", "title": "MKÜ HABERLER", "icon": "📰"},
+    "mku_duyurular": {"bg": "#800000", "title": "MKÜ DUYURULAR", "icon": "📢"},
+    "egitim_haberler": {"bg": "#064E3B", "title": "EĞİTİM FAKÜLTESİ", "icon": "🎓"},
+    "egitim_duyurular": {"bg": "#064E3B", "title": "EĞİTİM DUYURULAR", "icon": "🔔"},
+    "sosyal_bilimler_haberler": {"bg": "#4C1D95", "title": "SOSYAL BİLİMLER", "icon": "🌍"},
+    "sosyal_bilimler_duyurular": {"bg": "#4C1D95", "title": "SOSYAL DUYURULAR", "icon": "📋"},
+    "turkce_ogrt_haberler": {"bg": "#0F766E", "title": "TÜRKÇE ÖĞRETMENLİĞİ", "icon": "✒️"},
+    "turkce_ogrt_duyurular": {"bg": "#0F766E", "title": "TÜRKÇE DUYURULAR", "icon": "📚"}
+}
+
+def generate_academic_svg(category_key):
+    """Resim olmayan duyurular için yüksek kaliteli, akademik bir SVG üretir."""
+    theme = THEMES.get(category_key, {"bg": "#1F2937", "title": "MKÜ", "icon": "📝"})
+    
+    svg = f"""
+    <svg width="800" height="450" xmlns="http://www.w3.org/2000/svg">
+        <rect width="800" height="450" fill="{theme['bg']}"/>
+        <defs>
+            <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:rgba(255,255,255,0.1);stop-opacity:1" />
+                <stop offset="100%" style="stop-color:rgba(0,0,0,0.2);stop-opacity:1" />
+            </linearGradient>
+        </defs>
+        <rect width="800" height="450" fill="url(#grad)"/>
+        <line x1="50" y1="350" x2="750" y2="350" stroke="white" stroke-width="1" opacity="0.3"/>
+        <text x="400" y="200" font-family="Arial, sans-serif" font-size="80" fill="white" text-anchor="middle">{theme['icon']}</text>
+        <text x="400" y="280" font-family="Georgia, serif" font-size="34" font-weight="bold" fill="white" text-anchor="middle" letter-spacing="2">
+            {theme['title']}
+        </text>
+        <text x="400" y="320" font-family="Arial, sans-serif" font-size="16" fill="rgba(255,255,255,0.7)" text-anchor="middle" letter-spacing="5">
+            HATAY MUSTAFA KEMAL ÜNİVERSİTESİ
+        </text>
+    </svg>
+    """
+    # SVG'yi base64 formatına çeviriyoruz ki RSS içinde doğrudan görünsün
+    encoded = base64.b64encode(svg.encode('utf-8')).decode('utf-8')
+    return f"data:image/svg+xml;base64,{encoded}"
+
+# --- TARİH İŞLEME VE BOT MANTIĞI ---
 AYLAR = {"Ocak":"01","Şubat":"02","Mart":"03","Nisan":"04","Mayıs":"05","Haziran":"06",
          "Temmuz":"07","Ağustos":"08","Eylül":"09","Ekim":"10","Kasım":"11","Aralık":"12"}
-
-URLS = {
-    "mku_haberler": "https://mku.edu.tr/newslist",
-    "mku_duyurular": "https://mku.edu.tr/announcements",
-    "egitim_haberler": "https://mku.edu.tr/departments/8/newsList",
-    "egitim_duyurular": "https://mku.edu.tr/departments/8/announcements",
-    "sosyal_bilimler_haberler": "https://mku.edu.tr/departments/121/newsList",
-    "sosyal_bilimler_duyurular": "https://mku.edu.tr/departments/121/announcements",
-    "turkce_ogrt_haberler": "https://mku.edu.tr/departments/1488/newsList",
-    "turkce_ogrt_duyurular": "https://mku.edu.tr/departments/1488/announcements"
-}
-
-# HER KATEGORİ İÇİN ÖZEL VARSAYILAN RESİMLER (Estetik Renk Kodlarıyla)
-VARSAYILAN_RESIMLER = {
-    "mku_haberler": "https://placehold.co/800x400/1E3A8A/FFFFFF/png?text=MKU+Haberler&font=Montserrat", # Koyu Mavi
-    "mku_duyurular": "https://placehold.co/800x400/B91C1C/FFFFFF/png?text=MKU+Duyurular&font=Montserrat", # Koyu Kırmızı
-    "egitim_haberler": "https://placehold.co/800x400/047857/FFFFFF/png?text=Egitim+Fakultesi\nHaberler&font=Montserrat", # Zümrüt Yeşili
-    "egitim_duyurular": "https://placehold.co/800x400/047857/FFFFFF/png?text=Egitim+Fakultesi\nDuyurular&font=Montserrat",
-    "sosyal_bilimler_haberler": "https://placehold.co/800x400/6D28D9/FFFFFF/png?text=Sosyal+Bilimler\nHaberler&font=Montserrat", # Mor
-    "sosyal_bilimler_duyurular": "https://placehold.co/800x400/6D28D9/FFFFFF/png?text=Sosyal+Bilimler\nDuyurular&font=Montserrat",
-    "turkce_ogrt_haberler": "https://placehold.co/800x400/0F766E/FFFFFF/png?text=Turkce+Ogretmenligi\nHaberler&font=Montserrat", # Turkuaz
-    "turkce_ogrt_duyurular": "https://placehold.co/800x400/0F766E/FFFFFF/png?text=Turkce+Ogretmenligi\nDuyurular&font=Montserrat"
-}
 
 def tr_tarih_isle(tarih_str):
     try:
@@ -47,13 +65,13 @@ def tr_tarih_isle(tarih_str):
     return datetime.now(pytz.timezone('Europe/Istanbul'))
 
 def generate_rss(name, url, page):
-    print(f"{name} taranıyor: {url}")
+    print(f"{name} taranıyor...")
     try:
         page.goto(url, timeout=60000, wait_until="networkidle")
-        page.wait_for_timeout(5000)
+        page.wait_for_timeout(4000)
         html_content = page.content()
     except Exception as e:
-        print(f"Hata: {e}")
+        print(f"Hata oluştu: {e}")
         return
 
     soup = BeautifulSoup(html_content, 'html.parser')
@@ -62,7 +80,7 @@ def generate_rss(name, url, page):
     
     fg = FeedGenerator()
     fg.id(url); fg.title(name.upper()); fg.link(href=url, rel='alternate'); fg.language('tr')
-    fg.description(f'MKÜ {name} - Otomatik Besleme')
+    fg.description(f'MKÜ {name} - Akademik Besleme')
 
     added_links = set()
     count = 0
@@ -78,19 +96,17 @@ def generate_rss(name, url, page):
         full_link = "https://mku.edu.tr/" + link.lstrip('/') if not link.startswith('http') else link
         if "mku.edu.tr" not in full_link or full_link in added_links: continue
 
-        # --- RESİM VE YEDEK RESİM KONTROLÜ ---
+        # --- RESİM SEÇİMİ ---
         img_tag = parent.find('img')
         img_url = ""
-        
-        # 1. Sitede resim var mı diye bak
         if img_tag and img_tag.get('src'):
             img_url = img_tag['src']
             if not img_url.startswith('http'): 
                 img_url = "https://mku.edu.tr/" + img_url.lstrip('/')
-                
-        # 2. Eğer sitede resim yoksa, bizim tasarladığımız yedek resmi kullan
+        
+        # Resim yoksa AKADEMİK SVG üret!
         if not img_url:
-            img_url = VARSAYILAN_RESIMLER.get(name, "https://placehold.co/800x400/333333/FFFFFF/png?text=MKU+Duyuru")
+            img_url = generate_academic_svg(name)
 
         tarih_obj = tr_tarih_isle(full_text)
         added_links.add(full_link)
@@ -99,13 +115,14 @@ def generate_rss(name, url, page):
         fe.id(full_link)
         fe.link(href=full_link)
         
+        # En uzun metin başlıktır
         text_parts = [t.strip() for t in full_text.split('  ') if len(t.strip()) > 10]
-        fe.title(max(text_parts, key=len) if text_parts else "Yeni Duyuru")
+        fe.title(max(text_parts, key=len) if text_parts else "Duyuru")
         
-        # Açıklama içeriği
-        desc = ""
-        if img_url: desc += f'<img src="{img_url}" style="width:100%; border-radius:8px; margin-bottom:12px;"/><br/>'
-        desc += f"<b>Detay:</b> {full_text[:300]}..."
+        # Açıklama (SVG veya Gerçek Resim + Detay)
+        desc = f'<img src="{img_url}" style="width:100%; border-radius:10px; margin-bottom:15px;"/><br/>'
+        desc += f"<b>Kategori:</b> {name.replace('_', ' ').upper()}<br/>"
+        desc += f"<b>Özet:</b> {full_text[:350]}..."
         fe.description(desc)
         
         fe.published(tarih_obj)
@@ -115,15 +132,26 @@ def generate_rss(name, url, page):
 
     if not os.path.exists('rss_files'): os.makedirs('rss_files')
     fg.rss_file(f"rss_files/{name}.xml")
-    print(f"{name} tamamlandı. ({count} içerik)")
+    print(f"Bitti: {name}")
 
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context(user_agent="Mozilla/5.0 Chrome/120.0.0.0 Safari/537.36")
+        context = browser.new_context(user_agent="Mozilla/5.0 Chrome/120.0 Safari/537.36")
         page = context.new_page()
         for name, url in URLS.items():
             generate_rss(name, url, page)
         browser.close()
+
+URLS = {
+    "mku_haberler": "https://mku.edu.tr/newslist",
+    "mku_duyurular": "https://mku.edu.tr/announcements",
+    "egitim_haberler": "https://mku.edu.tr/departments/8/newsList",
+    "egitim_duyurular": "https://mku.edu.tr/departments/8/announcements",
+    "sosyal_bilimler_haberler": "https://mku.edu.tr/departments/121/newsList",
+    "sosyal_bilimler_duyurular": "https://mku.edu.tr/departments/121/announcements",
+    "turkce_ogrt_haberler": "https://mku.edu.tr/departments/1488/newsList",
+    "turkce_ogrt_duyurular": "https://mku.edu.tr/departments/1488/announcements"
+}
 
 if __name__ == "__main__": main()
