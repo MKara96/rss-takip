@@ -2,3 +2,5 @@ playwright
 beautifulsoup4
 feedgen
 pytz
+requests
+Pillow
