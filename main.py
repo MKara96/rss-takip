@@ -5,57 +5,29 @@ import os
 import pytz
 from datetime import datetime, timedelta
 import re
-import base64
 
-# --- 8 KATEGORİ İÇİN RESMİ 'RESMİ BİLDİRİ / UPDATE' TASARIMLARI (SVG) ---
-THEMES = {
-    "mku_haberler": {"top": "MKÜ", "bottom": "HABERLERİ", "color": "#0ea5e9", "badge": "📰 HABER BÜLTENİ"},
-    "mku_duyurular": {"top": "MKÜ", "bottom": "DUYURULARI", "color": "#ef4444", "badge": "📌 RESMİ DUYURU"},
-    "egitim_haberler": {"top": "EĞİTİM FAKÜLTESİ", "bottom": "HABERLERİ", "color": "#10b981", "badge": "📰 HABER BÜLTENİ"},
-    "egitim_duyurular": {"top": "EĞİTİM FAKÜLTESİ", "bottom": "DUYURULARI", "color": "#10b981", "badge": "🔔 BİLGİLENDİRME"},
-    "sosyal_bilimler_haberler": {"top": "SOSYAL BİLİMLER", "bottom": "HABERLERİ", "color": "#8b5cf6", "badge": "📰 HABER BÜLTENİ"},
-    "sosyal_bilimler_duyurular": {"top": "SOSYAL BİLİMLER", "bottom": "DUYURULARI", "color": "#8b5cf6", "badge": "⚡ GÜNCELLEME"},
-    "turkce_ogrt_haberler": {"top": "TÜRKÇE ÖĞRETMENLİĞİ", "bottom": "HABERLERİ", "color": "#14b8a6", "badge": "📰 HABER BÜLTENİ"},
-    "turkce_ogrt_duyurular": {"top": "TÜRKÇE ÖĞRETMENLİĞİ", "bottom": "DUYURULARI", "color": "#14b8a6", "badge": "📢 ÖNEMLİ DUYURU"}
-}
-
-def generate_update_svg(category_key):
-    """Modern, resmi bir sistem bildirisi/update kapağı üretir."""
-    t = THEMES.get(category_key, {"top": "MKÜ", "bottom": "DÖKÜMANI", "color": "#64748b", "badge": "⚡ BİLGİLENDİRME"})
+# --- AKADEMİK VE EDİTORYAL GÖRSEL ÜRETİCİ (GERÇEK PNG LİNKLERİ) ---
+def generate_editorial_image(category_key):
+    # Akademik Renkler: Lacivert, Bordo, Koyu Orman Yeşili, Koyu Mor, Derin Turkuaz
+    themes = {
+        "mku_haberler": {"bg": "0f172a", "title": "MKU+HABERLERI"},
+        "mku_duyurular": {"bg": "7f1d1d", "title": "MKU+DUYURULARI"},
+        "egitim_haberler": {"bg": "14532d", "title": "EGITIM+FAKULTESI%0AHABERLERI"},
+        "egitim_duyurular": {"bg": "14532d", "title": "EGITIM+FAKULTESI%0ADUYURULARI"},
+        "sosyal_bilimler_haberler": {"bg": "4c1d95", "title": "SOSYAL+BILIMLER%0AHABERLERI"},
+        "sosyal_bilimler_duyurular": {"bg": "4c1d95", "title": "SOSYAL+BILIMLER%0ADUYURULARI"},
+        "turkce_ogrt_haberler": {"bg": "134e4a", "title": "TURKCE+OGRETMENLIGI%0AHABERLERI"},
+        "turkce_ogrt_duyurular": {"bg": "134e4a", "title": "TURKCE+OGRETMENLIGI%0ADUYURULARI"}
+    }
+    t = themes.get(category_key, {"bg": "1e293b", "title": "AKADEMIK+DUYURU"})
     
-    # Modern, koyu tema bildiri kartı tasarımı
-    svg = f"""
-    <svg width="800" height="400" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#0f172a" />
-                <stop offset="100%" stop-color="#1e293b" />
-            </linearGradient>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#334155" stroke-width="0.5"/>
-            </pattern>
-        </defs>
-        <rect width="800" height="400" fill="url(#bg)"/>
-        <rect width="800" height="400" fill="url(#grid)"/>
-        
-        <rect width="12" height="400" fill="{t['color']}"/>
-        
-        <text x="60" y="80" font-family="system-ui, -apple-system, sans-serif" font-size="14" fill="#94a3b8" letter-spacing="4">T.C. HATAY MUSTAFA KEMAL ÜNİVERSİTESİ</text>
-        
-        <rect x="60" y="120" width="220" height="36" rx="6" fill="{t['color']}" fill-opacity="0.15" stroke="{t['color']}" stroke-width="1"/>
-        <text x="170" y="144" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="bold" fill="{t['color']}" text-anchor="middle" letter-spacing="1">{t['badge']}</text>
-        
-        <text x="60" y="230" font-family="'Times New Roman', Times, serif" font-size="38" font-weight="800" fill="#f8fafc" letter-spacing="1">{t['top']}</text>
-        <text x="60" y="280" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="300" fill="#cbd5e1" letter-spacing="2">{t['bottom']}</text>
-        
-        <line x1="60" y1="330" x2="740" y2="330" stroke="#334155" stroke-width="1"/>
-        <text x="60" y="365" font-family="monospace" font-size="12" fill="#475569">SYS.UPDATE // OTO-GÜNCELLEME SİSTEMİ</text>
-    </svg>
-    """
-    encoded = base64.b64encode(svg.encode('utf-8')).decode('utf-8')
-    return f"data:image/svg+xml;base64,{encoded}"
+    # URL formatında boşluklar ve satır atlamalar (%0A)
+    text = f"T.C.+HATAY+MUSTAFA+KEMAL+UNIVERSITESI%0A%0A---%0A%0A{t['title']}%0A%0A---%0A%0AResmi+Akademik+Bulten"
+    
+    # Gerçek PNG resmi üreten ve RSS okuyucuların kapağa sorunsuz alacağı link (Playfair Display akademik fontu ile)
+    return f"https://placehold.co/800x400/{t['bg']}/f8fafc/png?text={text}&font=Playfair+Display"
 
-# --- TARİH VE BOT MANTIĞI ---
+# --- TARİH İŞLEME ---
 AYLAR = {"Ocak":"01","Şubat":"02","Mart":"03","Nisan":"04","Mayıs":"05","Haziran":"06",
          "Temmuz":"07","Ağustos":"08","Eylül":"09","Ekim":"10","Kasım":"11","Aralık":"12"}
 
@@ -77,8 +49,7 @@ def generate_rss(name, url, page):
         page.goto(url, timeout=60000, wait_until="networkidle")
         page.wait_for_timeout(4000)
         html_content = page.content()
-    except Exception as e:
-        return
+    except Exception as e: return
 
     soup = BeautifulSoup(html_content, 'html.parser')
     for element in soup(["header", "footer", "nav", "aside", "script", "style"]): 
@@ -86,65 +57,76 @@ def generate_rss(name, url, page):
     
     fg = FeedGenerator()
     fg.id(url); fg.title(name.upper().replace('_', ' ')); fg.link(href=url, rel='alternate'); fg.language('tr')
-    fg.description(f'Hatay Mustafa Kemal Üniversitesi {name.replace("_", " ").title()} Akademik Yayını')
+    fg.description(f'MKÜ {name.replace("_", " ").title()} Akademik Yayını')
 
     added_links = set()
     count = 0
-    
-    # Zaman hilesi için o anki saati sabitliyoruz
     tz = pytz.timezone('Europe/Istanbul')
     base_time = datetime.now(tz)
     
     for item in soup.find_all('a', href=True):
         link = item['href']
+        if len(link) < 3 or link.startswith(('#', 'javascript', 'mailto', 'tel')): continue
+        
+        # BİLGİ OKUMA SORUNU ÇÖZÜMÜ: Sadece linki değil, kapsayıcı kutuyu genişletiyoruz
         parent = item.find_parent('div')
         if not parent: continue
         
-        full_text = parent.get_text(separator=' ', strip=True)
-        if len(full_text) < 30: continue
+        # Eğer kutu çok küçükse (sadece başlık varsa), bir üst kutuya çıkıp tüm metni al
+        if len(parent.get_text(strip=True)) < 40 and parent.parent and parent.parent.name == 'div':
+            parent = parent.parent
+            
+        raw_text = parent.get_text(separator=' | ', strip=True)
+        chunks = [c.strip() for c in raw_text.split(' | ') if len(c.strip()) > 3]
+        if not chunks: continue
         
+        # En mantıklı başlığı bul
+        link_text = item.get_text(strip=True)
+        title = link_text if len(link_text) > 15 else max(chunks, key=len)
+        if len(title) < 20: continue
+
         full_link = "https://mku.edu.tr/" + link.lstrip('/') if not link.startswith('http') else link
         if "mku.edu.tr" not in full_link or full_link in added_links: continue
 
-        # --- RESİM SEÇİMİ VE OTOMATİK THUMBNAIL ENTEGRASYONU ---
+        # --- RESİM SEÇİMİ ---
         img_tag = parent.find('img')
         img_url = ""
         is_real_image = False
         
-        # 1. Sitede resim var mı diye bak (Gerçek ise Thumbnail olarak ayarla)
         if img_tag and img_tag.get('src'):
             img_url = img_tag['src']
             if not img_url.startswith('http'): 
                 img_url = "https://mku.edu.tr/" + img_url.lstrip('/')
             is_real_image = True
         
-        # 2. Gerçek resim yoksa, kategorisine özel Resmi Bildiri üret!
         if not is_real_image:
-            img_url = generate_update_svg(name)
+            img_url = generate_editorial_image(name)
 
-        tarih_obj = tr_tarih_isle(full_text)
+        tarih_obj = tr_tarih_isle(raw_text)
         added_links.add(full_link)
         
         fe = fg.add_entry()
-        fe.id(full_link)
+        
+        # CACHE HİLESİ: RSS Okuyucunun tasarımları hemen çekmesi için linke #v2 ekledik
+        fe.id(full_link + "#v2")
         fe.link(href=full_link)
+        fe.title(title)
         
-        # --- KAPAK FOTOĞRAFI KODU (ENCLOSURE) ---
-        # Siteden çekilen gerçek resimse RSS okuyucun kapağa çeker.
-        if is_real_image:
-            fe.enclosure(img_url, 0, 'image/jpeg')
+        # KAPAK FOTOĞRAFI (Artık %100 her okuyucuda kapağa düşecek)
+        fe.enclosure(img_url, 0, 'image/png')
         
-        text_parts = [t.strip() for t in full_text.split('  ') if len(t.strip()) > 10]
-        fe.title(max(text_parts, key=len) if text_parts else "Yeni Akademik Duyuru")
+        # DETAYLI AÇIKLAMA: Bilgilerin madde madde okunduğu yer
+        desc_html = f'<img src="{img_url}" style="width:100%; border-radius:4px; margin-bottom:15px;"/><br/>'
+        desc_html += "<b>Duyuru Detayları:</b><br/>"
         
-        # --- AÇIKLAMA (Resmi Update Görselini en başa koyuyoruz) ---
-        desc = f'<img src="{img_url}" style="width:100%; border-radius:10px; border: 1px solid #e2e8f0; margin-bottom:15px;"/><br/>'
-        desc += f"<div style='font-family: serif; font-size: 15px; color: #334155;'>"
-        desc += f"<b style='color:#0f172a; font-family: system-ui;'>Kategori:</b> {name.replace('_', ' ').upper()}<br/><br/>"
-        desc += f"<b style='color:#0f172a; font-family: system-ui;'>Özet Döküman Metni:</b><br/> {full_text[:350]}..."
-        desc += "</div>"
-        fe.description(desc)
-        
+        # Başlık haricindeki tüm detayları (Tarih, Bölüm) alt alta yazdırıyoruz
+        detaylar = [c for c in chunks if c != title]
+        if detaylar:
+            desc_html += "<br/>".join([f"• {c}" for c in detaylar])
+        else:
+            desc_html += "• " + raw_text[:200] + "..."
+            
+        fe.description(desc_html)
         fe.published(base_time - timedelta(minutes=count)) 
         
         count += 1
