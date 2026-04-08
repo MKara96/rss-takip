@@ -3,7 +3,99 @@ from bs4 import BeautifulSoup
 from feedgen.feed import FeedGenerator
 import os
 import pytz
-from datetime import datetime, timedelta
+from datetime import datetime
+import re
+
+# Ay isimlerini sayıya çevirmek için sözlük
+AYLAR = {"Ocak":"01","Şubat":"02","Mart":"03","Nisan":"04","Mayıs":"05","Haziran":"06",
+         "Temmuz":"07","Ağustos":"08","Eylül":"09","Ekim":"10","Kasım":"11","Aralık":"12"}
+
+def tr_tarih_isle(tarih_str):
+    try:
+        # Metin içindeki tarihi (örn: 7 Nisan 2026) bulur
+        for tr_ay, sayi_ay in AYLAR.items():
+            if tr_ay in tarih_str:
+                tarih_str = tarih_str.replace(tr_ay, sayi_ay)
+        parcalar = re.findall(r'\d+', tarih_str)
+        if len(parcalar) >= 3:
+            gun, ay, yil = parcalar[0].zfill(2), parcalar[1].zfill(2), parcalar[2]
+            return datetime.strptime(f"{yil}-{ay}-{gun}", "%Y-%m-%d").replace(tzinfo=pytz.timezone('Europe/Istanbul'))
+    except: pass
+    return datetime.now(pytz.timezone('Europe/Istanbul'))
+
+def generate_rss(name, url, page):
+    print(f"{name} taranıyor: {url}")
+    try:
+        page.goto(url, timeout=60000, wait_until="networkidle")
+        page.wait_for_timeout(5000)
+        html_content = page.content()
+    except Exception as e:
+        print(f"Hata: {e}")
+        return
+
+    soup = BeautifulSoup(html_content, 'html.parser')
+    for element in soup(["header", "footer", "nav", "aside", "script", "style"]): 
+        element.decompose()
+    
+    fg = FeedGenerator()
+    fg.id(url); fg.title(name.upper()); fg.link(href=url, rel='alternate'); fg.language('tr')
+    fg.description(f'MKÜ {name} - Otomatik Besleme')
+
+    added_links = set()
+    count = 0
+    
+    for item in soup.find_all('a', href=True):
+        link = item['href']
+        parent = item.find_parent('div')
+        if not parent: continue
+        
+        full_text = parent.get_text(separator=' ', strip=True)
+        if len(full_text) < 30: continue
+        
+        full_link = "https://mku.edu.tr/" + link.lstrip('/') if not link.startswith('http') else link
+        if "mku.edu.tr" not in full_link or full_link in added_links: continue
+
+        # --- RESİM VE TARİH ---
+        img_tag = parent.find('img')
+        img_url = ""
+        if img_tag and img_tag.get('src'):
+            img_url = img_tag['src']
+            if not img_url.startswith('http'): img_url = "https://mku.edu.tr/" + img_url.lstrip('/')
+
+        tarih_obj = tr_tarih_isle(full_text)
+        added_links.add(full_link)
+        
+        fe = fg.add_entry()
+        fe.id(full_link)
+        fe.link(href=full_link)
+        
+        # Başlık ayıklama
+        text_parts = [t.strip() for t in full_text.split('  ') if len(t.strip()) > 10]
+        fe.title(max(text_parts, key=len) if text_parts else "Yeni Duyuru")
+        
+        # Açıklama içeriği (Resim + Metin)
+        desc = ""
+        if img_url: desc += f'<img src="{img_url}" style="width:100%; margin-bottom:10px;"/><br/>'
+        desc += f"<b>Detay:</b> {full_text[:300]}..."
+        fe.description(desc)
+        
+        fe.published(tarih_obj)
+        
+        count += 1
+        if count >= 15: break
+
+    if not os.path.exists('rss_files'): os.makedirs('rss_files')
+    fg.rss_file(f"rss_files/{name}.xml")
+    print(f"{name} tamamlandı. ({count} içerik)")
+
+def main():
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(user_agent="Mozilla/5.0 Chrome/120.0.0.0 Safari/537.36")
+        page = context.new_page()
+        for name, url in URLS.items():
+            generate_rss(name, url, page)
+        browser.close()
 
 URLS = {
     "mku_haberler": "https://mku.edu.tr/newslist",
@@ -16,104 +108,4 @@ URLS = {
     "turkce_ogrt_duyurular": "https://mku.edu.tr/departments/1488/announcements"
 }
 
-def generate_rss(name, url, page):
-    print(f"{name} için veriler çekiliyor: {url}")
-    
-    try:
-        page.goto(url, timeout=40000, wait_until="networkidle")
-        page.wait_for_timeout(3000)
-        html_content = page.content()
-    except Exception as e:
-        print(f"Bağlantı hatası ({url}): {e}")
-        return
-
-    soup = BeautifulSoup(html_content, 'html.parser')
-    
-    for element in soup(["header", "footer", "nav", "aside"]):
-        element.decompose()
-    
-    fg = FeedGenerator()
-    fg.id(url)
-    fg.title(name.replace('_', ' ').upper())
-    fg.author({'name': 'MKU RSS Bot'})
-    fg.link(href=url, rel='alternate')
-    fg.description(f'{name} için detaylı RSS beslemesi')
-    fg.language('tr')
-
-    added_links = set()
-    count = 0
-    
-    # Zaman hilesi için sistemin o anki saatini sabitliyoruz
-    tz = pytz.timezone('Europe/Istanbul')
-    base_time = datetime.now(tz)
-    
-    for item in soup.find_all('a', href=True):
-        link = item['href']
-        if link.startswith(('#', 'javascript', 'mailto', 'tel')) or len(link) < 3:
-            continue
-            
-        raw_text = item.get_text(separator=' | ', strip=True)
-        chunks = [c.strip() for c in raw_text.split(' | ') if len(c.strip()) > 2]
-        
-        if len(chunks) <= 1 or (len(chunks) > 0 and len(chunks[0]) < 50):
-            parent_div = item.find_parent('div')
-            if parent_div:
-                parent_text = parent_div.get_text(separator=' | ', strip=True)
-                parent_chunks = [c.strip() for c in parent_text.split(' | ') if len(c.strip()) > 2]
-                if 1 < len(parent_chunks) <= 8:
-                    chunks = parent_chunks
-
-        if not chunks: continue
-        if len(chunks) > 8: continue
-            
-        title = max(chunks, key=len)
-        if len(title) < 25: continue
-            
-        ignore_words = ["rektör", "sekreterlik", "danışmanları", "kalem müdürlüğü", "tanıtım filmi", "faaliyetler"]
-        if any(w in title.lower() for w in ignore_words) and len(title) < 60:
-            continue
-
-        full_link = "https://mku.edu.tr/" + link.lstrip('/') if not link.startswith('http') else link
-
-        if "mku.edu.tr" in full_link and full_link not in added_links:
-            added_links.add(full_link)
-            
-            fe = fg.add_entry()
-            fe.id(full_link)
-            fe.title(title)
-            
-            details = [c for c in chunks if c != title]
-            if details:
-                desc_html = "<br/>".join([f"• {c}" for c in details])
-            else:
-                desc_html = "Detaylar için haber linkine tıklayın."
-                
-            fe.description(desc_html)
-            fe.link(href=full_link)
-            
-            # BURASI ÖNEMLİ: Her yeni haberde süreyi 1 dakika geriye alıyoruz
-            fe.published(base_time - timedelta(minutes=count)) 
-            
-            count += 1
-            if count >= 15:
-                break
-
-    if not os.path.exists('rss_files'):
-        os.makedirs('rss_files')
-        
-    fg.rss_file(f"rss_files/{name}.xml")
-    print(f"{name}.xml oluşturuldu. Bulunan içerik: {count}")
-
-def main():
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
-        page = context.new_page()
-        for name, url in URLS.items():
-            generate_rss(name, url, page)
-        browser.close()
-
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()
