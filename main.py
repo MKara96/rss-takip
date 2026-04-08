@@ -7,48 +7,54 @@ from datetime import datetime
 import re
 import base64
 
-# --- AKADEMİK TASARIM AYARLARI ---
-# Renkler: Navy, Burgundy, Forest Green, Deep Teal, Slate
+# --- 8 KATEGORİ İÇİN RESMİ 'GÜNCELLEME/BİLDİRİ' TASARIMLARI ---
 THEMES = {
-    "mku_haberler": {"bg": "#002147", "title": "MKÜ HABERLER", "icon": "📰"},
-    "mku_duyurular": {"bg": "#800000", "title": "MKÜ DUYURULAR", "icon": "📢"},
-    "egitim_haberler": {"bg": "#064E3B", "title": "EĞİTİM FAKÜLTESİ", "icon": "🎓"},
-    "egitim_duyurular": {"bg": "#064E3B", "title": "EĞİTİM DUYURULAR", "icon": "🔔"},
-    "sosyal_bilimler_haberler": {"bg": "#4C1D95", "title": "SOSYAL BİLİMLER", "icon": "🌍"},
-    "sosyal_bilimler_duyurular": {"bg": "#4C1D95", "title": "SOSYAL DUYURULAR", "icon": "📋"},
-    "turkce_ogrt_haberler": {"bg": "#0F766E", "title": "TÜRKÇE ÖĞRETMENLİĞİ", "icon": "✒️"},
-    "turkce_ogrt_duyurular": {"bg": "#0F766E", "title": "TÜRKÇE DUYURULAR", "icon": "📚"}
+    "mku_haberler": {"top": "MKÜ", "bottom": "HABERLERİ", "color": "#0ea5e9", "badge": "📰 HABER BÜLTENİ"},
+    "mku_duyurular": {"top": "MKÜ", "bottom": "DUYURULARI", "color": "#ef4444", "badge": "📌 RESMİ DUYURU"},
+    "egitim_haberler": {"top": "EĞİTİM FAKÜLTESİ", "bottom": "HABERLERİ", "color": "#10b981", "badge": "📰 HABER BÜLTENİ"},
+    "egitim_duyurular": {"top": "EĞİTİM FAKÜLTESİ", "bottom": "DUYURULARI", "color": "#10b981", "badge": "🔔 BİLGİLENDİRME"},
+    "sosyal_bilimler_haberler": {"top": "SOSYAL BİLİMLER", "bottom": "HABERLERİ", "color": "#8b5cf6", "badge": "📰 HABER BÜLTENİ"},
+    "sosyal_bilimler_duyurular": {"top": "SOSYAL BİLİMLER", "bottom": "DUYURULARI", "color": "#8b5cf6", "badge": "⚡ GÜNCELLEME"},
+    "turkce_ogrt_haberler": {"top": "TÜRKÇE ÖĞRETMENLİĞİ", "bottom": "HABERLERİ", "color": "#14b8a6", "badge": "📰 HABER BÜLTENİ"},
+    "turkce_ogrt_duyurular": {"top": "TÜRKÇE ÖĞRETMENLİĞİ", "bottom": "DUYURULARI", "color": "#14b8a6", "badge": "📢 ÖNEMLİ DUYURU"}
 }
 
-def generate_academic_svg(category_key):
-    """Resim olmayan duyurular için yüksek kaliteli, akademik bir SVG üretir."""
-    theme = THEMES.get(category_key, {"bg": "#1F2937", "title": "MKÜ", "icon": "📝"})
+def generate_update_svg(category_key):
+    """Modern, resmi bir sistem bildirisi kapağı üretir."""
+    t = THEMES.get(category_key, {"top": "SİSTEM", "bottom": "BİLDİRİSİ", "color": "#64748b", "badge": "⚡ BİLGİLENDİRME"})
     
+    # Modern, koyu tema bildiri kartı tasarımı
     svg = f"""
-    <svg width="800" height="450" xmlns="http://www.w3.org/2000/svg">
-        <rect width="800" height="450" fill="{theme['bg']}"/>
+    <svg width="800" height="400" xmlns="http://www.w3.org/2000/svg">
         <defs>
-            <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style="stop-color:rgba(255,255,255,0.1);stop-opacity:1" />
-                <stop offset="100%" style="stop-color:rgba(0,0,0,0.2);stop-opacity:1" />
+            <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#0f172a" />
+                <stop offset="100%" stop-color="#1e293b" />
             </linearGradient>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#334155" stroke-width="0.5"/>
+            </pattern>
         </defs>
-        <rect width="800" height="450" fill="url(#grad)"/>
-        <line x1="50" y1="350" x2="750" y2="350" stroke="white" stroke-width="1" opacity="0.3"/>
-        <text x="400" y="200" font-family="Arial, sans-serif" font-size="80" fill="white" text-anchor="middle">{theme['icon']}</text>
-        <text x="400" y="280" font-family="Georgia, serif" font-size="34" font-weight="bold" fill="white" text-anchor="middle" letter-spacing="2">
-            {theme['title']}
-        </text>
-        <text x="400" y="320" font-family="Arial, sans-serif" font-size="16" fill="rgba(255,255,255,0.7)" text-anchor="middle" letter-spacing="5">
-            HATAY MUSTAFA KEMAL ÜNİVERSİTESİ
-        </text>
+        <rect width="800" height="400" fill="url(#bg)"/>
+        <rect width="800" height="400" fill="url(#grid)"/>
+        
+        <rect width="12" height="400" fill="{t['color']}"/>
+        
+        <text x="60" y="80" font-family="system-ui, -apple-system, sans-serif" font-size="14" fill="#94a3b8" letter-spacing="4">T.C. HATAY MUSTAFA KEMAL ÜNİVERSİTESİ</text>
+        
+        <rect x="60" y="120" width="220" height="36" rx="6" fill="{t['color']}" fill-opacity="0.15" stroke="{t['color']}" stroke-width="1"/>
+        <text x="170" y="144" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="bold" fill="{t['color']}" text-anchor="middle" letter-spacing="1">{t['badge']}</text>
+        
+        <text x="60" y="230" font-family="system-ui, -apple-system, sans-serif" font-size="38" font-weight="800" fill="#f8fafc" letter-spacing="1">{t['top']}</text>
+        <text x="60" y="280" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="300" fill="#cbd5e1" letter-spacing="2">{t['bottom']}</text>
+        
+        <line x1="60" y1="330" x2="740" y2="330" stroke="#334155" stroke-width="1"/>
+        <text x="60" y="365" font-family="monospace" font-size="12" fill="#475569">SYS.UPDATE // OTO-GÜNCELLEME SİSTEMİ</text>
     </svg>
     """
-    # SVG'yi base64 formatına çeviriyoruz ki RSS içinde doğrudan görünsün
     encoded = base64.b64encode(svg.encode('utf-8')).decode('utf-8')
     return f"data:image/svg+xml;base64,{encoded}"
 
-# --- TARİH İŞLEME VE BOT MANTIĞI ---
 AYLAR = {"Ocak":"01","Şubat":"02","Mart":"03","Nisan":"04","Mayıs":"05","Haziran":"06",
          "Temmuz":"07","Ağustos":"08","Eylül":"09","Ekim":"10","Kasım":"11","Aralık":"12"}
 
@@ -71,7 +77,6 @@ def generate_rss(name, url, page):
         page.wait_for_timeout(4000)
         html_content = page.content()
     except Exception as e:
-        print(f"Hata oluştu: {e}")
         return
 
     soup = BeautifulSoup(html_content, 'html.parser')
@@ -79,8 +84,8 @@ def generate_rss(name, url, page):
         element.decompose()
     
     fg = FeedGenerator()
-    fg.id(url); fg.title(name.upper()); fg.link(href=url, rel='alternate'); fg.language('tr')
-    fg.description(f'MKÜ {name} - Akademik Besleme')
+    fg.id(url); fg.title(name.upper().replace('_', ' ')); fg.link(href=url, rel='alternate'); fg.language('tr')
+    fg.description(f'MKÜ {name.replace("_", " ").title()} Resmi Bildiri Akışı')
 
     added_links = set()
     count = 0
@@ -99,14 +104,17 @@ def generate_rss(name, url, page):
         # --- RESİM SEÇİMİ ---
         img_tag = parent.find('img')
         img_url = ""
+        is_real_image = False
+        
         if img_tag and img_tag.get('src'):
             img_url = img_tag['src']
             if not img_url.startswith('http'): 
                 img_url = "https://mku.edu.tr/" + img_url.lstrip('/')
+            is_real_image = True
         
-        # Resim yoksa AKADEMİK SVG üret!
-        if not img_url:
-            img_url = generate_academic_svg(name)
+        # Gerçek resim yoksa sistem bildirisi üret!
+        if not is_real_image:
+            img_url = generate_update_svg(name)
 
         tarih_obj = tr_tarih_isle(full_text)
         added_links.add(full_link)
@@ -115,14 +123,20 @@ def generate_rss(name, url, page):
         fe.id(full_link)
         fe.link(href=full_link)
         
-        # En uzun metin başlıktır
-        text_parts = [t.strip() for t in full_text.split('  ') if len(t.strip()) > 10]
-        fe.title(max(text_parts, key=len) if text_parts else "Duyuru")
+        # --- KAPAK FOTOĞRAFI KODU (ENCLOSURE) ---
+        # Siteden çekilen gerçek resimse RSS Thumbnail standartlarına ekliyoruz.
+        if is_real_image:
+            fe.enclosure(img_url, 0, 'image/jpeg')
         
-        # Açıklama (SVG veya Gerçek Resim + Detay)
-        desc = f'<img src="{img_url}" style="width:100%; border-radius:10px; margin-bottom:15px;"/><br/>'
-        desc += f"<b>Kategori:</b> {name.replace('_', ' ').upper()}<br/>"
-        desc += f"<b>Özet:</b> {full_text[:350]}..."
+        text_parts = [t.strip() for t in full_text.split('  ') if len(t.strip()) > 10]
+        fe.title(max(text_parts, key=len) if text_parts else "Yeni Duyuru")
+        
+        # Açıklama (Her ihtimale karşı resmi metnin en üstüne de koyuyoruz)
+        desc = f'<img src="{img_url}" style="width:100%; max-width: 800px; border-radius:8px; border: 1px solid #e2e8f0; margin-bottom:15px;"/><br/>'
+        desc += f"<div style='font-family: sans-serif; color: #334155;'>"
+        desc += f"<b style='color:#0f172a;'>Kategori:</b> {name.replace('_', ' ').upper()}<br/><br/>"
+        desc += f"<b style='color:#0f172a;'>Özet Metin:</b><br/> {full_text[:350]}..."
+        desc += "</div>"
         fe.description(desc)
         
         fe.published(tarih_obj)
@@ -132,26 +146,27 @@ def generate_rss(name, url, page):
 
     if not os.path.exists('rss_files'): os.makedirs('rss_files')
     fg.rss_file(f"rss_files/{name}.xml")
-    print(f"Bitti: {name}")
 
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(user_agent="Mozilla/5.0 Chrome/120.0 Safari/537.36")
         page = context.new_page()
+        
+        URLS = {
+            "mku_haberler": "https://mku.edu.tr/newslist",
+            "mku_duyurular": "https://mku.edu.tr/announcements",
+            "egitim_haberler": "https://mku.edu.tr/departments/8/newsList",
+            "egitim_duyurular": "https://mku.edu.tr/departments/8/announcements",
+            "sosyal_bilimler_haberler": "https://mku.edu.tr/departments/121/newsList",
+            "sosyal_bilimler_duyurular": "https://mku.edu.tr/departments/121/announcements",
+            "turkce_ogrt_haberler": "https://mku.edu.tr/departments/1488/newsList",
+            "turkce_ogrt_duyurular": "https://mku.edu.tr/departments/1488/announcements"
+        }
+        
         for name, url in URLS.items():
             generate_rss(name, url, page)
+            
         browser.close()
-
-URLS = {
-    "mku_haberler": "https://mku.edu.tr/newslist",
-    "mku_duyurular": "https://mku.edu.tr/announcements",
-    "egitim_haberler": "https://mku.edu.tr/departments/8/newsList",
-    "egitim_duyurular": "https://mku.edu.tr/departments/8/announcements",
-    "sosyal_bilimler_haberler": "https://mku.edu.tr/departments/121/newsList",
-    "sosyal_bilimler_duyurular": "https://mku.edu.tr/departments/121/announcements",
-    "turkce_ogrt_haberler": "https://mku.edu.tr/departments/1488/newsList",
-    "turkce_ogrt_duyurular": "https://mku.edu.tr/departments/1488/announcements"
-}
 
 if __name__ == "__main__": main()
